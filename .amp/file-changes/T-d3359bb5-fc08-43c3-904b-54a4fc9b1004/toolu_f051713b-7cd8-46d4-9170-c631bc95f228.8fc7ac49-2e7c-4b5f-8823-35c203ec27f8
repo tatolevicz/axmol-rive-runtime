@@ -1,0 +1,10 @@
+{
+  "id": "8fc7ac49-2e7c-4b5f-8823-35c203ec27f8",
+  "uri": "file:///Users/arthurmotelevicz/Projects/AITomatoes/axmol_rive/HelloWorld/run.sh",
+  "before": "",
+  "after": "#!/bin/bash\nset -e\n# Check if the app bundle exists\nAPP_PATH=\"build/Debug/HelloWorld.desktop.app\"\nif [ ! -d \"$APP_PATH\" ]; then\n    # Try alternative name (depends on CMakeLists.txt project name)\n    APP_PATH=\"build/Debug/HelloWorld.app\"\nfi\n\nif [ -d \"$APP_PATH\" ]; then\n    echo \"Launching $APP_PATH...\"\n    open \"$APP_PATH\"\nelse\n    echo \"Error: App bundle not found at $APP_PATH\"\n    echo \"Make sure you have built the project using ./build.sh\"\n    exit 1\nfi\n",
+  "diff": "Index: file:///Users/arthurmotelevicz/Projects/AITomatoes/axmol_rive/HelloWorld/run.sh\n===================================================================\n--- file:///Users/arthurmotelevicz/Projects/AITomatoes/axmol_rive/HelloWorld/run.sh\toriginal\n+++ file:///Users/arthurmotelevicz/Projects/AITomatoes/axmol_rive/HelloWorld/run.sh\tmodified\n@@ -0,0 +1,17 @@\n+#!/bin/bash\n+set -e\n+# Check if the app bundle exists\n+APP_PATH=\"build/Debug/HelloWorld.desktop.app\"\n+if [ ! -d \"$APP_PATH\" ]; then\n+    # Try alternative name (depends on CMakeLists.txt project name)\n+    APP_PATH=\"build/Debug/HelloWorld.app\"\n+fi\n+\n+if [ -d \"$APP_PATH\" ]; then\n+    echo \"Launching $APP_PATH...\"\n+    open \"$APP_PATH\"\n+else\n+    echo \"Error: App bundle not found at $APP_PATH\"\n+    echo \"Make sure you have built the project using ./build.sh\"\n+    exit 1\n+fi\n",
+  "isNewFile": true,
+  "reverted": false,
+  "timestamp": 1763770222805
+}

@@ -1,0 +1,10 @@
+{
+  "id": "660863ba-f532-475e-8fe6-5ae830deafab",
+  "uri": "file:///Users/arthurmotelevicz/Projects/AITomatoes/axmol_rive/HelloWorld/build.sh",
+  "before": "",
+  "after": "#!/bin/bash\nset -e\necho \"Building for macOS (Apple Silicon)...\"\n# Configure CMake for Xcode\ncmake -S . -B build -GXcode -DCMAKE_OSX_ARCHITECTURES=arm64\n\n# Build the Debug configuration\ncmake --build build --config Debug\necho \"Build complete.\"\n",
+  "diff": "Index: file:///Users/arthurmotelevicz/Projects/AITomatoes/axmol_rive/HelloWorld/build.sh\n===================================================================\n--- file:///Users/arthurmotelevicz/Projects/AITomatoes/axmol_rive/HelloWorld/build.sh\toriginal\n+++ file:///Users/arthurmotelevicz/Projects/AITomatoes/axmol_rive/HelloWorld/build.sh\tmodified\n@@ -0,0 +1,9 @@\n+#!/bin/bash\n+set -e\n+echo \"Building for macOS (Apple Silicon)...\"\n+# Configure CMake for Xcode\n+cmake -S . -B build -GXcode -DCMAKE_OSX_ARCHITECTURES=arm64\n+\n+# Build the Debug configuration\n+cmake --build build --config Debug\n+echo \"Build complete.\"\n",
+  "isNewFile": true,
+  "reverted": false,
+  "timestamp": 1763770218360
+}

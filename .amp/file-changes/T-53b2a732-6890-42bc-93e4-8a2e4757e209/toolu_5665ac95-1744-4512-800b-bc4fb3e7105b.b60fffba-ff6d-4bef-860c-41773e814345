@@ -1,0 +1,10 @@
+{
+  "id": "b60fffba-ff6d-4bef-860c-41773e814345",
+  "uri": "file:///Users/arthurmotelevicz/install_axmol.sh",
+  "before": "",
+  "after": "#!/bin/bash\nset -e\n\necho \"Checking for Axmol installation...\"\n\nINSTALL_DIR=\"$HOME/Projects/Axmol\"\nmkdir -p \"$INSTALL_DIR\"\n\nif [ ! -d \"$INSTALL_DIR/axmol\" ]; then\n    echo \"Cloning Axmol repository...\"\n    git clone https://github.com/axmolengine/axmol.git \"$INSTALL_DIR/axmol\"\nelse\n    echo \"Axmol repository found at $INSTALL_DIR/axmol\"\nfi\n\ncd \"$INSTALL_DIR/axmol\"\n\necho \"Running setup.py...\"\necho \"NOTE: You may be prompted for input. Press Enter to accept defaults.\"\npython3 setup.py\n\necho \"\"\necho \"Installation script finished.\"\necho \"IMPORTANT: Run 'source ~/.zshrc' to update your PATH before using axmol.\"\n",
+  "diff": "Index: file:///Users/arthurmotelevicz/install_axmol.sh\n===================================================================\n--- file:///Users/arthurmotelevicz/install_axmol.sh\toriginal\n+++ file:///Users/arthurmotelevicz/install_axmol.sh\tmodified\n@@ -0,0 +1,24 @@\n+#!/bin/bash\n+set -e\n+\n+echo \"Checking for Axmol installation...\"\n+\n+INSTALL_DIR=\"$HOME/Projects/Axmol\"\n+mkdir -p \"$INSTALL_DIR\"\n+\n+if [ ! -d \"$INSTALL_DIR/axmol\" ]; then\n+    echo \"Cloning Axmol repository...\"\n+    git clone https://github.com/axmolengine/axmol.git \"$INSTALL_DIR/axmol\"\n+else\n+    echo \"Axmol repository found at $INSTALL_DIR/axmol\"\n+fi\n+\n+cd \"$INSTALL_DIR/axmol\"\n+\n+echo \"Running setup.py...\"\n+echo \"NOTE: You may be prompted for input. Press Enter to accept defaults.\"\n+python3 setup.py\n+\n+echo \"\"\n+echo \"Installation script finished.\"\n+echo \"IMPORTANT: Run 'source ~/.zshrc' to update your PATH before using axmol.\"\n",
+  "isNewFile": true,
+  "reverted": false,
+  "timestamp": 1763769954938
+}
