@@ -48,10 +48,10 @@ bool MainScene::init()
 
     // 4. Load .riv File
     auto fileUtils = FileUtils::getInstance();
-    std::string fullPath = fileUtils->fullPathForFilename("marty.riv");
+    std::string fullPath = fileUtils->fullPathForFilename("marty_site.riv");
     
     if (fullPath.empty()) {
-        AXLOGD("Error: marty.riv not found!");
+        AXLOGD("Error: marty_site.riv not found!");
     } else {
         auto data = fileUtils->getDataFromFile(fullPath);
         if (!data.isNull()) {
@@ -63,16 +63,22 @@ bool MainScene::init()
             if (_riveFile) {
                 _artboard = _riveFile->artboardDefault();
                 if (_artboard) {
+                    // Advance artboard to initial state
                     _artboard->advance(0.0f);
                     
-                    // Play the first animation if available
-                    // auto anim = _artboard->animationAt(0);
-                    // if (anim) {
-                    //    _riveScene = _artboard->instance(); // Wait, Scene/StateMachine logic
-                    // }
-                    // Simple animation playback using LinearAnimationInstance directly?
-                    // Or just advance artboard if it has a state machine?
-                    // For now just show the artboard.
+                    // Try to load the first State Machine
+                    _stateMachine = _artboard->stateMachineAt(0);
+                    if (_stateMachine) {
+                        AXLOGD("State Machine loaded successfully!");
+                    } else {
+                        // Fallback: Try to load the first animation
+                        _animInstance = _artboard->animationAt(0);
+                        if (_animInstance) {
+                            AXLOGD("No State Machine, playing animation: %s", _animInstance->name().c_str());
+                        } else {
+                            AXLOGD("No State Machine and no Animation found.");
+                        }
+                    }
                     
                     AXLOGD("Rive file loaded successfully!");
                 }
@@ -94,6 +100,13 @@ bool MainScene::init()
         menu->setPosition(Vec2::ZERO);
         this->addChild(menu, 2);
     }
+    
+    // 6. Touch Listener
+    _touchListener = ax::EventListenerTouchAllAtOnce::create();
+    _touchListener->onTouchesBegan = AX_CALLBACK_2(MainScene::onTouchesBegan, this);
+    _touchListener->onTouchesMoved = AX_CALLBACK_2(MainScene::onTouchesMoved, this);
+    _touchListener->onTouchesEnded = AX_CALLBACK_2(MainScene::onTouchesEnded, this);
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(_touchListener, this);
 
     scheduleUpdate();
     return true;
@@ -106,9 +119,15 @@ void MainScene::update(float delta)
         _riveDrawNode->clear();
         
         // Advance animation
-        // Note: In a real app you would advance the StateMachine or AnimationInstance here.
-        // For the artboard itself, advance updates components.
-        _artboard->advance(delta);
+        if (_stateMachine) {
+            _stateMachine->advance(delta);
+        } else if (_animInstance) {
+            _animInstance->advance(delta);
+            _animInstance->apply();
+            _artboard->advance(delta); // Still needed to update components
+        } else {
+            _artboard->advance(delta);
+        }
         
         // Center and scale the artboard to fit the screen
         auto visibleSize = _director->getVisibleSize();
@@ -128,6 +147,70 @@ void MainScene::menuCloseCallback(ax::Object* sender)
     _director->end();
 }
 
-void MainScene::onTouchesBegan(const std::vector<ax::Touch*>& touches, ax::Event* event) {}
-void MainScene::onTouchesMoved(const std::vector<ax::Touch*>& touches, ax::Event* event) {}
-void MainScene::onTouchesEnded(const std::vector<ax::Touch*>& touches, ax::Event* event) {}
+void MainScene::onTouchesBegan(const std::vector<ax::Touch*>& touches, ax::Event* event) {
+    if (_stateMachine && !touches.empty()) {
+        auto touch = touches[0];
+        auto location = touch->getLocation();
+        // Convert to Rive coordinates (which are rendered centered/scaled)
+        // This is tricky because we used 'align' in draw.
+        // Ideally, we should store the transform used in 'draw'.
+        // For now, let's assume we can just pass screen coordinates if we didn't align?
+        // But we DID align.
+        // To do this properly, we need the inverse of the alignment transform.
+        // Rive's 'computeAlignment' returns a Mat2D. We should store it.
+        
+        // Re-calculate alignment transform
+        auto visibleSize = _director->getVisibleSize();
+        rive::Mat2D transform = rive::computeAlignment(
+            rive::Fit::contain, rive::Alignment::center,
+            rive::AABB(0, 0, visibleSize.width, visibleSize.height),
+            _artboard->bounds()
+        );
+        
+        rive::Mat2D inverse;
+        if (transform.invert(&inverse)) {
+            rive::Vec2D localPos = inverse * rive::Vec2D(location.x, visibleSize.height - location.y); // Axmol Y is up, Rive Y is down
+            _stateMachine->pointerDown(localPos);
+        }
+    }
+}
+
+void MainScene::onTouchesMoved(const std::vector<ax::Touch*>& touches, ax::Event* event) {
+    if (_stateMachine && !touches.empty()) {
+        auto touch = touches[0];
+        auto location = touch->getLocation();
+        
+        auto visibleSize = _director->getVisibleSize();
+        rive::Mat2D transform = rive::computeAlignment(
+            rive::Fit::contain, rive::Alignment::center,
+            rive::AABB(0, 0, visibleSize.width, visibleSize.height),
+            _artboard->bounds()
+        );
+        
+        rive::Mat2D inverse;
+        if (transform.invert(&inverse)) {
+            rive::Vec2D localPos = inverse * rive::Vec2D(location.x, visibleSize.height - location.y);
+            _stateMachine->pointerMove(localPos);
+        }
+    }
+}
+
+void MainScene::onTouchesEnded(const std::vector<ax::Touch*>& touches, ax::Event* event) {
+    if (_stateMachine && !touches.empty()) {
+        auto touch = touches[0];
+        auto location = touch->getLocation();
+        
+        auto visibleSize = _director->getVisibleSize();
+        rive::Mat2D transform = rive::computeAlignment(
+            rive::Fit::contain, rive::Alignment::center,
+            rive::AABB(0, 0, visibleSize.width, visibleSize.height),
+            _artboard->bounds()
+        );
+        
+        rive::Mat2D inverse;
+        if (transform.invert(&inverse)) {
+            rive::Vec2D localPos = inverse * rive::Vec2D(location.x, visibleSize.height - location.y);
+            _stateMachine->pointerUp(localPos);
+        }
+    }
+}

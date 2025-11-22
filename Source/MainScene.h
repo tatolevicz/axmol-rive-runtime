@@ -2,6 +2,8 @@
 
 #include "axmol/axmol.h"
 #include "rive/refcnt.hpp" // Include for rive::rcp
+#include "rive/animation/state_machine_instance.hpp"
+#include "rive/animation/linear_animation_instance.hpp" // Added
 #include <memory>
 #include <vector>
 
@@ -10,6 +12,8 @@ namespace rive {
     class File;
     class ArtboardInstance;
     class Scene;
+    class StateMachineInstance;
+    class LinearAnimationInstance; // Added
 }
 class AxmolRenderer;
 class AxmolFactory;
@@ -34,6 +38,8 @@ private:
     
     std::unique_ptr<rive::ArtboardInstance> _artboard;
     std::unique_ptr<rive::Scene> _riveScene; // For state machines or animations
+    std::unique_ptr<rive::StateMachineInstance> _stateMachine;
+    std::unique_ptr<rive::LinearAnimationInstance> _animInstance; // Fallback animation
     std::unique_ptr<AxmolRenderer> _riveRenderer;
     std::unique_ptr<AxmolFactory> _riveFactory;
     
