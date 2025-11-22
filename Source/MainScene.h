@@ -30,10 +30,14 @@ public:
     void onTouchesEnded(const std::vector<ax::Touch*>& touches, ax::Event* event);
     void menuCloseCallback(ax::Object* sender);
 
+    // Helper to load artboard by index
+    void loadArtboard(int index);
+
     MainScene();
     ~MainScene() override;
 
 private:
+    int _currentArtboardIndex = 0;
     ax::Node* _riveContainer = nullptr;
     
     std::unique_ptr<rive::ArtboardInstance> _artboard;

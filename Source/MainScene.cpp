@@ -51,7 +51,7 @@ bool MainScene::init()
     std::string fullPath = fileUtils->fullPathForFilename("emojis.riv");
 
     if (fullPath.empty()) {
-        AXLOGD("Error: emojis.riv not found!");
+        AXLOGD("Error: marty_site.riv not found!");
     } else {
         auto data = fileUtils->getDataFromFile(fullPath);
         if (!data.isNull()) {
@@ -59,10 +59,33 @@ bool MainScene::init()
 
             rive::ImportResult result;
             _riveFile = rive::File::import(bytes, _riveFactory.get(), &result);
-
+            
             if (_riveFile) {
+                // Log File Contents
+                AXLOGD("Rive File Loaded. Artboard Count: %zu", _riveFile->artboardCount());
+                for (size_t i = 0; i < _riveFile->artboardCount(); ++i) {
+                    auto ab = _riveFile->artboardAt(i);
+                    AXLOGD("  Artboard [%zu]: %s", i, ab->name().c_str());
+                }
+
                 _artboard = _riveFile->artboardDefault();
                 if (_artboard) {
+                    // Load initial artboard using our helper (handles logic)
+                    loadArtboard(0);
+                    
+                    AXLOGD("Loaded Default Artboard: %s", _artboard->name().c_str());
+                    
+                    // Log Animations and State Machines
+                    AXLOGD("  Animation Count: %zu", _artboard->animationCount());
+                    for (size_t i = 0; i < _artboard->animationCount(); ++i) {
+                        AXLOGD("    Anim [%zu]: %s", i, _artboard->animationNameAt(i).c_str());
+                    }
+                    
+                    AXLOGD("  StateMachine Count: %zu", _artboard->stateMachineCount());
+                    for (size_t i = 0; i < _artboard->stateMachineCount(); ++i) {
+                        AXLOGD("    SM [%zu]: %s", i, _artboard->stateMachineNameAt(i).c_str());
+                    }
+
                     // Advance artboard to initial state
                     _artboard->advance(0.0f);
 
@@ -195,22 +218,69 @@ void MainScene::onTouchesMoved(const std::vector<ax::Touch*>& touches, ax::Event
     }
 }
 
+void MainScene::loadArtboard(int index) {
+    if (!_riveFile) return;
+    
+    if (index < 0 || index >= _riveFile->artboardCount()) {
+        index = 0;
+    }
+    _currentArtboardIndex = index;
+    
+    _artboard = _riveFile->artboardAt(index);
+    if (!_artboard) return;
+    
+    AXLOGD("Switching to Artboard [%d]: %s", index, _artboard->name().c_str());
+    
+    _artboard->advance(0.0f);
+    
+    // Reset State Machine / Animation
+    _stateMachine = _artboard->stateMachineAt(0);
+    if (!_stateMachine) {
+        _stateMachine = _artboard->defaultStateMachine();
+    }
+    
+    _animInstance = nullptr;
+    if (!_stateMachine) {
+        auto anim = _artboard->animationAt(0);
+        if (anim) {
+            _animInstance = _artboard->animationAt(0); // Correct way
+        }
+    }
+    
+    // Reset Renderer State?
+    // AxmolRenderer persists, but its internal state (clipping) is per-frame.
+    // The DrawNode is cleared every frame in update().
+}
+
 void MainScene::onTouchesEnded(const std::vector<ax::Touch*>& touches, ax::Event* event) {
-    if (_stateMachine && !touches.empty()) {
+    if (!touches.empty()) {
+        // If we have a state machine, pass input first
+        if (_stateMachine) {
+             auto touch = touches[0];
+             auto location = touch->getLocation();
+             auto visibleSize = _director->getVisibleSize();
+             rive::Mat2D transform = rive::computeAlignment(
+                 rive::Fit::contain, rive::Alignment::center,
+                 rive::AABB(0, 0, visibleSize.width, visibleSize.height),
+                 _artboard->bounds()
+             );
+             rive::Mat2D inverse;
+             if (transform.invert(&inverse)) {
+                 rive::Vec2D localPos = inverse * rive::Vec2D(location.x, visibleSize.height - location.y);
+                 _stateMachine->pointerUp(localPos);
+             }
+        }
+        
+        // Check if touch is in a "Next" button area (e.g., bottom right) or just cycle
+        // Let's just cycle for debug simplicity if the touch didn't trigger a state change?
+        // Or add a specific zone.
+        // Let's say: Top-Right corner touch = Next Artboard.
         auto touch = touches[0];
         auto location = touch->getLocation();
-
         auto visibleSize = _director->getVisibleSize();
-        rive::Mat2D transform = rive::computeAlignment(
-            rive::Fit::contain, rive::Alignment::center,
-            rive::AABB(0, 0, visibleSize.width, visibleSize.height),
-            _artboard->bounds()
-        );
-
-        rive::Mat2D inverse;
-        if (transform.invert(&inverse)) {
-            rive::Vec2D localPos = inverse * rive::Vec2D(location.x, visibleSize.height - location.y);
-            _stateMachine->pointerUp(localPos);
+        
+        if (location.x > visibleSize.width * 0.8f && location.y > visibleSize.height * 0.8f) {
+            loadArtboard(_currentArtboardIndex + 1);
         }
     }
 }
