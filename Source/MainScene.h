@@ -34,7 +34,7 @@ public:
     ~MainScene() override;
 
 private:
-    ax::DrawNode* _riveDrawNode = nullptr;
+    ax::Node* _riveContainer = nullptr;
     
     std::unique_ptr<rive::ArtboardInstance> _artboard;
     std::unique_ptr<rive::Scene> _riveScene; // For state machines or animations

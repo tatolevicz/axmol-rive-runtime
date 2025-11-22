@@ -96,23 +96,43 @@ public:
     rive::rcp<AxmolRenderShader> _shader; // Store the shader
 };
 
+#include <stack>
+
+// ... existing classes ...
+
+struct AxmolState {
+    int clipDepth = 0;
+};
+
 class AxmolRenderer : public rive::TessRenderer {
 public:
-    AxmolRenderer(ax::DrawNode* drawNode);
+    AxmolRenderer(ax::Node* rootNode);
     
     void drawPath(rive::RenderPath* path, rive::RenderPaint* paint) override;
     void clipPath(rive::RenderPath* path) override;
+    void save() override;
+    void restore() override;
     
     // Stub implementations for pure virtuals in TessRenderer/Renderer
     void orthographicProjection(float left, float right, float bottom, float top, float near, float far) override {}
+    
+    // Call at start of frame
+    void startFrame();
     
     // Images - Stub for now
     void drawImage(const rive::RenderImage*, rive::ImageSampler, rive::BlendMode, float opacity) override {}
     void drawImageMesh(const rive::RenderImage*, rive::ImageSampler, rive::rcp<rive::RenderBuffer>, rive::rcp<rive::RenderBuffer>, rive::rcp<rive::RenderBuffer>, uint32_t, uint32_t, rive::BlendMode, float) override {}
 
 private:
-    ax::DrawNode* _drawNode;
-    rive::ContourStroke _stroke; // Helper for stroking
+    ax::DrawNode* _drawNode = nullptr; // Current draw node
+    ax::Node* _rootNode = nullptr;
+    rive::ContourStroke _stroke;
+    
+    std::stack<ax::Node*> _containerStack;
+    std::stack<AxmolState> _stateStack;
+    int _clipDepth = 0;
+    
+    void updateDrawNode();
 };
 
 class AxmolFactory : public rive::Factory {

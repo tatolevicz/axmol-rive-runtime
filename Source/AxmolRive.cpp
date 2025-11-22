@@ -146,18 +146,96 @@ void AxmolRenderPaint::shader(rive::rcp<rive::RenderShader> shader) {
 void AxmolRenderPaint::invalidateStroke() { /* Handle invalidation if caching */ }
 
 // AxmolRenderer Implementation
-AxmolRenderer::AxmolRenderer(ax::DrawNode* drawNode) : _drawNode(drawNode) {}
+AxmolRenderer::AxmolRenderer(ax::Node* rootNode) : _rootNode(rootNode) {
+    _containerStack.push(_rootNode);
+    updateDrawNode();
+}
+
+void AxmolRenderer::updateDrawNode() {
+    _drawNode = ax::DrawNode::create();
+    _containerStack.top()->addChild(_drawNode);
+}
+
+void AxmolRenderer::startFrame() {
+    // Reset stacks
+    while (!_containerStack.empty()) _containerStack.pop();
+    _containerStack.push(_rootNode);
+    
+    while (!_stateStack.empty()) _stateStack.pop();
+    
+    _clipDepth = 0;
+    
+    // Clear Axmol scene graph
+    _rootNode->removeAllChildren();
+    
+    // Create initial DrawNode
+    updateDrawNode();
+}
+
+void AxmolRenderer::save() {
+    rive::TessRenderer::save();
+    _stateStack.push({_clipDepth});
+}
+
+void AxmolRenderer::restore() {
+    rive::TessRenderer::restore();
+    if (!_stateStack.empty()) {
+        auto state = _stateStack.top();
+        _stateStack.pop();
+        
+        // Pop clippings
+        while (_clipDepth > state.clipDepth) {
+            if (!_containerStack.empty()) {
+                _containerStack.pop();
+            }
+            _clipDepth--;
+        }
+        
+        // Create new DrawNode in the current container (which might be a parent ClippingNode or Root)
+        updateDrawNode();
+    }
+}
 
 void AxmolRenderer::clipPath(rive::RenderPath* path) {
-    // Axmol DrawNode doesn't support arbitrary clipping easily.
-    // We can use Stencil Buffer in Axmol, but Renderer::clipPath implies a stack.
-    // TessRenderer handles the stack logic and provides m_Stack.
-    // But actually applying the clip to the DrawNode is hard.
-    // For now, we IGNORE clipping or use scissor test if it's a rect.
-    // Rive clipping can be complex paths.
-    // To support this properly, we'd need to use ax::ClippingNode or custom stencil commands.
-    // Given we are using a single DrawNode, clipping is difficult.
-    // MVP: Ignore clipping.
+    rive::TessRenderer::clipPath(path);
+    
+    // Create Stencil
+    auto stencil = ax::DrawNode::create();
+    
+    // Draw path into stencil
+    // Reuse logic from drawPath but for stencil (Fill only)
+    auto axPath = static_cast<AxmolRenderPath*>(path);
+    axPath->contour(transform());
+    axPath->triangulate(); // Ensure updated
+    
+    const auto& m = transform();
+    for (size_t i = 0; i < axPath->_rawIndices.size(); i += 3) {
+        if (i + 2 >= axPath->_rawIndices.size()) break;
+        unsigned short i1 = axPath->_rawIndices[i];
+        unsigned short i2 = axPath->_rawIndices[i+1];
+        unsigned short i3 = axPath->_rawIndices[i+2];
+        
+        rive::Vec2D v1 = m * axPath->_rawVertices[i1];
+        rive::Vec2D v2 = m * axPath->_rawVertices[i2];
+        rive::Vec2D v3 = m * axPath->_rawVertices[i3];
+        
+        stencil->drawTriangle(
+            ax::Vec2(v1.x, v1.y),
+            ax::Vec2(v2.x, v2.y),
+            ax::Vec2(v3.x, v3.y),
+            ax::Color::GREEN // Color doesn't matter for stencil, alpha must be > 0
+        );
+    }
+    
+    // Create ClippingNode
+    auto clipper = ax::ClippingNode::create(stencil);
+    clipper->setAlphaThreshold(0.0f); // Default is 1, usually we want 0 or small
+    
+    _containerStack.top()->addChild(clipper);
+    _containerStack.push(clipper);
+    _clipDepth++;
+    
+    updateDrawNode();
 }
 
 void AxmolRenderer::drawPath(rive::RenderPath* path, rive::RenderPaint* paint) {
@@ -196,25 +274,27 @@ void AxmolRenderer::drawPath(rive::RenderPath* path, rive::RenderPaint* paint) {
                 const auto& v3 = strip[i+2];
                 
                 // v1, v2, v3 are already transformed (if extrudeStroke used 'm')
-                // Let's check extrudeStroke implementation again.
-                // It calls contour(transform). So yes, they are transformed.
                 
                 if (hasShader) {
-                    float cx = (v1.x + v2.x + v3.x) / 3.0f;
-                    float cy = (v1.y + v2.y + v3.y) / 3.0f;
-                    c = axPaint->_shader->getColor(cx, cy);
+                    ax::Color colors[3];
+                    colors[0] = ax::Color(axPaint->_shader->getColor(v1.x, v1.y));
+                    colors[1] = ax::Color(axPaint->_shader->getColor(v2.x, v2.y));
+                    colors[2] = ax::Color(axPaint->_shader->getColor(v3.x, v3.y));
+                    
+                    ax::Vec2 verts[3] = {
+                        ax::Vec2(v1.x, v1.y),
+                        ax::Vec2(v2.x, v2.y),
+                        ax::Vec2(v3.x, v3.y)
+                    };
+                    _drawNode->drawColoredTriangle(verts, colors);
+                } else {
+                    _drawNode->drawTriangle(
+                        ax::Vec2(v1.x, v1.y),
+                        ax::Vec2(v2.x, v2.y),
+                        ax::Vec2(v3.x, v3.y),
+                        c
+                    );
                 }
-                
-                // Triangles in strip alternate winding, but DrawNode is double-sided usually?
-                // If culling is enabled, we need to swap.
-                // Assuming no culling for now.
-                
-                _drawNode->drawTriangle(
-                    ax::Vec2(v1.x, v1.y),
-                    ax::Vec2(v2.x, v2.y),
-                    ax::Vec2(v3.x, v3.y),
-                    c
-                );
             }
         }
     } else {
@@ -250,17 +330,27 @@ void AxmolRenderer::drawPath(rive::RenderPath* path, rive::RenderPaint* paint) {
             rive::Vec2D v3 = m * axPath->_rawVertices[i3];
             
             if (hasShader) {
-                float cx = (v1.x + v2.x + v3.x) / 3.0f;
-                float cy = (v1.y + v2.y + v3.y) / 3.0f;
-                c = axPaint->_shader->getColor(cx, cy);
+                // Per-vertex coloring for smooth gradients
+                ax::Color colors[3];
+                colors[0] = ax::Color(axPaint->_shader->getColor(v1.x, v1.y));
+                colors[1] = ax::Color(axPaint->_shader->getColor(v2.x, v2.y));
+                colors[2] = ax::Color(axPaint->_shader->getColor(v3.x, v3.y));
+                
+                ax::Vec2 verts[3] = {
+                    ax::Vec2(v1.x, v1.y),
+                    ax::Vec2(v2.x, v2.y),
+                    ax::Vec2(v3.x, v3.y)
+                };
+                
+                _drawNode->drawColoredTriangle(verts, colors);
+            } else {
+                _drawNode->drawTriangle(
+                    ax::Vec2(v1.x, v1.y),
+                    ax::Vec2(v2.x, v2.y),
+                    ax::Vec2(v3.x, v3.y),
+                    c
+                );
             }
-            
-            _drawNode->drawTriangle(
-                ax::Vec2(v1.x, v1.y),
-                ax::Vec2(v2.x, v2.y),
-                ax::Vec2(v3.x, v3.y),
-                c
-            );
         }
     }
 }
