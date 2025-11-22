@@ -26,6 +26,9 @@ public:
     void setTriangulatedBounds(const rive::AABB& value) override;
     
     void rewind() override; // Override rewind to clear cache
+    
+    // Clears old geometry and shifts new geometry to front
+    void prune(size_t oldVertexCount, size_t oldIndexCount);
 
     // Friend to allow renderer to call protected contour()
     friend class AxmolRenderer;

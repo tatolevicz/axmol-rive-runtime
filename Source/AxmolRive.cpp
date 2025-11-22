@@ -91,6 +91,30 @@ void AxmolRenderPath::rewind() {
     _rawIndices.clear();
 }
 
+void AxmolRenderPath::prune(size_t oldVertexCount, size_t oldIndexCount) {
+    if (oldVertexCount == 0 && oldIndexCount == 0) return;
+    
+    // 1. Shift vertices
+    if (oldVertexCount < _rawVertices.size()) {
+        // Move [oldVertexCount, end] to [0, ...]
+        std::copy(_rawVertices.begin() + oldVertexCount, _rawVertices.end(), _rawVertices.begin());
+        _rawVertices.resize(_rawVertices.size() - oldVertexCount);
+    } else {
+        _rawVertices.clear();
+    }
+    
+    // 2. Shift indices and adjust values
+    if (oldIndexCount < _rawIndices.size()) {
+        size_t count = _rawIndices.size() - oldIndexCount;
+        for (size_t i = 0; i < count; ++i) {
+            _rawIndices[i] = _rawIndices[i + oldIndexCount] - oldVertexCount;
+        }
+        _rawIndices.resize(count);
+    } else {
+        _rawIndices.clear();
+    }
+}
+
 void AxmolRenderPath::addTriangles(rive::Span<const rive::Vec2D> vertices, rive::Span<const uint16_t> indices) {
     // Copy vertices and indices to storage
     size_t baseIndex = _rawVertices.size();
@@ -196,11 +220,17 @@ void AxmolRenderer::drawPath(rive::RenderPath* path, rive::RenderPaint* paint) {
     } else {
         // Fill Logic
         // Update cache if needed
-        axPath->contour(transform()); // Ensure contour is updated (triangulate logic does this but we might need to force it for transform?)
-        // Actually, triangulate() handles dirty checks.
-        // But we need to be careful about single path 'identity' reset logic in triangulate.
+        axPath->contour(transform()); // Ensure contour is updated
         
-        axPath->triangulate(axPath); // This populates _rawVertices with LOCAL coords (if single path) or RELATIVE coords (if container)
+        size_t oldV = axPath->_rawVertices.size();
+        size_t oldI = axPath->_rawIndices.size();
+        
+        bool changed = axPath->triangulate(); 
+        
+        if (changed) {
+            // Prune old geometry, keep new
+            axPath->prune(oldV, oldI);
+        }
         
         // Iterate and draw, applying transform 'm'
         if (axPath->_rawVertices.empty() || axPath->_rawIndices.empty()) {
